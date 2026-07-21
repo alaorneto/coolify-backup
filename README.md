@@ -349,7 +349,7 @@ Clone o repositório:
 
 ```bash
 git clone https://github.com/alaorneto/coolify-backup.git
-cd SEU-REPOSITORIO
+cd coolify-backup
 ```
 
 Copie o script:
