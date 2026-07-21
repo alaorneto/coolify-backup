@@ -348,7 +348,7 @@ restic version
 Clone o repositório:
 
 ```bash
-git clone https://github.com/SEU-USUARIO/SEU-REPOSITORIO.git
+git clone https://github.com/alaorneto/coolify-backup.git
 cd SEU-REPOSITORIO
 ```
 
