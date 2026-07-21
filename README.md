@@ -125,10 +125,6 @@ Exemplo:
 │   ├── mariadb
 │   ├── mongodb
 │   └── sqlite
-├── belfiore-admin
-│   └── shared
-│       ├── db.sqlite3
-│       └── media
 ├── databases
 ├── infrastructure
 └── monitoring
@@ -503,7 +499,7 @@ s3:https://ENDPOINT/contabo-server-backups/apps-01
 O nome pode ser definido no arquivo `/etc/restic/env`:
 
 ```bash
-export BACKUP_SERVER_NAME="servidor-belfiore"
+export BACKUP_SERVER_NAME="servidor-alpha"
 ```
 
 Isso é útil quando:
