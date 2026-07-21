@@ -1,0 +1,195 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+ENV_FILE="${ENV_FILE:-/etc/restic/env}"
+
+SRV_ROOT="/srv"
+COOLIFY_ROOT="/data/coolify"
+COOLIFY_ENV="${COOLIFY_ROOT}/source/.env"
+COOLIFY_SSH_KEYS="${COOLIFY_ROOT}/ssh/keys"
+
+log() {
+    printf '[%s] %s\n' "$(date '+%F %T')" "$*"
+}
+
+die() {
+    log "ERRO: $*"
+    exit 1
+}
+
+sanitize_name() {
+    printf '%s' "$1" |
+        tr '[:upper:]' '[:lower:]' |
+        sed \
+            -e 's/[^a-z0-9._-]/-/g' \
+            -e 's/^-*//' \
+            -e 's/-*$//'
+}
+
+is_coolify_server() {
+    # Forma principal de detecção: estrutura padrão do Coolify.
+    if [[ -f "$COOLIFY_ENV" ]] || [[ -d "$COOLIFY_ROOT" ]]; then
+        return 0
+    fi
+
+    # Detecção adicional através dos containers.
+    if command -v docker >/dev/null 2>&1; then
+        docker ps -a \
+            --format '{{.Names}}' 2>/dev/null |
+            grep -Eq '^(coolify|coolify-db|coolify-redis|coolify-realtime|coolify-proxy)$'
+    else
+        return 1
+    fi
+}
+
+if [[ "$EUID" -ne 0 ]]; then
+    die "Este script deve ser executado como root."
+fi
+
+if [[ ! -f "$ENV_FILE" ]]; then
+    die "Arquivo de configuração não encontrado: $ENV_FILE"
+fi
+
+if [[ ! -d "$SRV_ROOT" ]]; then
+    die "Diretório $SRV_ROOT não encontrado."
+fi
+
+# shellcheck disable=SC1090
+source "$ENV_FILE"
+
+#
+# Identificação do servidor
+#
+# BACKUP_SERVER_NAME pode ser definido manualmente no arquivo de ambiente.
+# Quando não estiver definido, será usado o hostname curto.
+#
+RAW_SERVER_NAME="${BACKUP_SERVER_NAME:-$(hostname -s 2>/dev/null || hostname)}"
+SERVER_NAME="$(sanitize_name "$RAW_SERVER_NAME")"
+
+if [[ -z "$SERVER_NAME" ]]; then
+    die "Não foi possível determinar o nome do servidor."
+fi
+
+#
+# Configuração do repositório
+#
+# RESTIC_REPOSITORY_BASE é a opção recomendada.
+# Para compatibilidade, RESTIC_REPOSITORY também pode conter o endereço-base.
+#
+BASE_REPOSITORY="${RESTIC_REPOSITORY_BASE:-${RESTIC_REPOSITORY:-}}"
+
+if [[ -z "$BASE_REPOSITORY" ]]; then
+    die "Defina RESTIC_REPOSITORY_BASE no arquivo $ENV_FILE."
+fi
+
+# Cada servidor recebe seu próprio prefixo/repositório no S3.
+export RESTIC_REPOSITORY="${BASE_REPOSITORY%/}/${SERVER_NAME}"
+
+#
+# Caminhos que entrarão no backup
+#
+BACKUP_PATHS=(
+    "$SRV_ROOT"
+)
+
+log "Servidor identificado: $SERVER_NAME"
+log "Repositório Restic: $RESTIC_REPOSITORY"
+log "Incluindo todo o conteúdo de $SRV_ROOT"
+
+#
+# Detecta se este é o servidor que executa a instância do Coolify.
+#
+if is_coolify_server; then
+    log "Instância local do Coolify detectada."
+    log "Incluindo $COOLIFY_ROOT no backup."
+
+    # O diretório completo é incluído para preservar:
+    # - APP_KEY e demais variáveis do Coolify;
+    # - chaves SSH;
+    # - configuração do proxy;
+    # - certificados;
+    # - arquivos de configuração da instalação;
+    # - dados auxiliares necessários para recuperação.
+    if [[ -d "$COOLIFY_ROOT" ]]; then
+        BACKUP_PATHS+=("$COOLIFY_ROOT")
+    else
+        log "AVISO: Coolify detectado, mas $COOLIFY_ROOT não existe."
+    fi
+
+    if [[ ! -f "$COOLIFY_ENV" ]]; then
+        log "AVISO: arquivo $COOLIFY_ENV não encontrado."
+    elif ! grep -Eq '^APP_KEY=.+$' "$COOLIFY_ENV"; then
+        log "AVISO: APP_KEY não encontrada ou vazia em $COOLIFY_ENV."
+    else
+        log "APP_KEY encontrada no arquivo de ambiente do Coolify."
+    fi
+
+    if [[ ! -d "$COOLIFY_SSH_KEYS" ]]; then
+        log "AVISO: diretório de chaves SSH não encontrado: $COOLIFY_SSH_KEYS"
+    elif ! find "$COOLIFY_SSH_KEYS" -type f -print -quit | grep -q .; then
+        log "AVISO: o diretório de chaves SSH está vazio."
+    else
+        log "Chaves SSH do Coolify encontradas."
+    fi
+else
+    log "Nenhuma instância local do Coolify foi detectada."
+fi
+
+#
+# Inicializa automaticamente o repositório específico deste servidor.
+#
+if restic cat config >/dev/null 2>&1; then
+    log "Repositório Restic já inicializado."
+else
+    log "Repositório ainda não inicializado. Executando restic init."
+    restic init
+fi
+
+#
+# Executa o backup.
+#
+# Como /srv inteiro é incluído, também serão copiados:
+# - /srv/backups;
+# - dumps dos bancos de dados;
+# - bind mounts;
+# - arquivos das aplicações;
+# - dados persistentes dos agentes;
+# - mídia e demais diretórios.
+#
+log "Iniciando backup Restic."
+
+restic backup \
+    --host "$SERVER_NAME" \
+    --tag automatico \
+    --tag "servidor-${SERVER_NAME}" \
+    --exclude-caches \
+    "${BACKUP_PATHS[@]}"
+
+#
+# Política de retenção.
+#
+log "Aplicando política de retenção."
+
+restic forget \
+    --host "$SERVER_NAME" \
+    --tag automatico \
+    --keep-daily 7 \
+    --keep-weekly 4 \
+    --keep-monthly 6 \
+    --prune
+
+#
+# Verificação do repositório.
+#
+# Pode ser desabilitada no arquivo de ambiente com:
+# export RUN_RESTIC_CHECK="false"
+#
+if [[ "${RUN_RESTIC_CHECK:-true}" == "true" ]]; then
+    log "Verificando integridade do repositório."
+    restic check
+else
+    log "Verificação do repositório desabilitada."
+fi
+
+log "Backup concluído com sucesso."
