@@ -355,14 +355,14 @@ cd coolify-backup
 Copie o script:
 
 ```bash
-sudo cp backup-server /usr/local/sbin/backup-server
+sudo cp coolify-backup /usr/local/sbin/coolify-backup
 ```
 
 Aplique permissões restritas:
 
 ```bash
-sudo chown root:root /usr/local/sbin/backup-server
-sudo chmod 700 /usr/local/sbin/backup-server
+sudo chown root:root /usr/local/sbin/coolify-backup
+sudo chmod 700 /usr/local/sbin/coolify-backup
 ```
 
 ---
@@ -547,7 +547,7 @@ Esse comportamento permite instalar o mesmo script em vários servidores sem ini
 Execute:
 
 ```bash
-sudo /usr/local/sbin/backup-server
+sudo /usr/local/sbin/coolify-backup
 ```
 
 Exemplo de saída:
@@ -667,7 +667,7 @@ sudo bash -c '
 Crie o serviço:
 
 ```bash
-sudo nano /etc/systemd/system/backup-server.service
+sudo nano /etc/systemd/system/coolify-backup.service
 ```
 
 Conteúdo:
@@ -681,7 +681,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/sbin/backup-server
+ExecStart=/usr/local/sbin/coolify-backup
 
 Nice=10
 IOSchedulingClass=best-effort
@@ -697,7 +697,7 @@ WantedBy=multi-user.target
 Crie o timer:
 
 ```bash
-sudo nano /etc/systemd/system/backup-server.timer
+sudo nano /etc/systemd/system/coolify-backup.timer
 ```
 
 Conteúdo:
@@ -724,19 +724,19 @@ sudo systemctl daemon-reload
 Ative o timer:
 
 ```bash
-sudo systemctl enable --now backup-server.timer
+sudo systemctl enable --now coolify-backup.timer
 ```
 
 Verifique:
 
 ```bash
-systemctl status backup-server.timer
+systemctl status coolify-backup.timer
 ```
 
 Liste os próximos timers:
 
 ```bash
-systemctl list-timers backup-server.timer
+systemctl list-timers coolify-backup.timer
 ```
 
 ---
@@ -771,25 +771,25 @@ Os horários variam automaticamente.
 Consulte os logs da última execução:
 
 ```bash
-sudo journalctl -u backup-server.service
+sudo journalctl -u coolify-backup.service
 ```
 
 Acompanhe em tempo real:
 
 ```bash
-sudo journalctl -u backup-server.service -f
+sudo journalctl -u coolify-backup.service -f
 ```
 
 Consulte apenas a execução atual:
 
 ```bash
-sudo journalctl -u backup-server.service --since today
+sudo journalctl -u coolify-backup.service --since today
 ```
 
 Verifique o resultado da última execução:
 
 ```bash
-systemctl status backup-server.service
+systemctl status coolify-backup.service
 ```
 
 ---
@@ -1130,7 +1130,7 @@ Utilize permissões restritas:
 sudo chmod 700 /etc/restic
 sudo chmod 600 /etc/restic/env
 sudo chmod 600 /etc/restic/password
-sudo chmod 700 /usr/local/sbin/backup-server
+sudo chmod 700 /usr/local/sbin/coolify-backup
 ```
 
 Não publique:
@@ -1297,7 +1297,7 @@ Verifique:
 Teste:
 
 ```bash
-sudo /usr/local/sbin/backup-server
+sudo /usr/local/sbin/coolify-backup
 ```
 
 ---
@@ -1449,14 +1449,14 @@ git pull
 Copie novamente:
 
 ```bash
-sudo cp backup-server /usr/local/sbin/backup-server
-sudo chmod 700 /usr/local/sbin/backup-server
+sudo cp coolify-backup /usr/local/sbin/coolify-backup
+sudo chmod 700 /usr/local/sbin/coolify-backup
 ```
 
 Teste:
 
 ```bash
-sudo /usr/local/sbin/backup-server
+sudo /usr/local/sbin/coolify-backup
 ```
 
 ---
